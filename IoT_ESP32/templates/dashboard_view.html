@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard {{ dashboard_id }}{% endblock %}
+
+{% block content %}
+<div class="dashboard-view">
+    <h2>Dashboard {{ dashboard_id }}</h2>
+    <div class="ip-info">
+        <h3>IP Address:</h3>
+        <p class="ip-display">{{ ip }}</p>
+        <p>Status: <span id="connectionStatus">Connecting...</span></p>
+    </div>
+    
+    <div class="data-container">
+        <h3>Collected Data</h3>
+        <div class="latest-reading">
+            <h4>Latest Reading</h4>
+            <p>Pressure: <span id="latestPressure">-</span></p>
+            <p>Time: <span id="latestTime">-</span></p>
+        </div>
+        <div class="data-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Pressure</th>
+                    </tr>
+                </thead>
+                <tbody id="dataTableBody">
+                    {% for item in data %}
+                    <tr>
+                        <td>{{ item.timestamp }}</td>
+                        <td>{{ item.pressure }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button onclick="window.location.href='/'">Back to Dashboard List</button>
+        <button id="toggleUpdates">Pause Updates</button>
+    </div>
+</div>
+
+<script>
+let isUpdating = true;
+let lastTimestamp = '';
+
+function updateData() {
+    if (!isUpdating) return;
+
+    fetch(`/api/data/{{ ip }}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.length > 0) {
+                const latestData = data[data.length - 1];
+                
+                // Update latest reading
+                document.getElementById('latestPressure').textContent = latestData.pressure;
+                document.getElementById('latestTime').textContent = latestData.timestamp;
+                document.getElementById('connectionStatus').textContent = 'Connected';
+                document.getElementById('connectionStatus').style.color = 'green';
+
+                // Only update table if we have new data
+                if (latestData.timestamp !== lastTimestamp) {
+                    lastTimestamp = latestData.timestamp;
+                    
+                    const tableBody = document.getElementById('dataTableBody');
+                    
+                    // Add new row at the top
+                    const newRow = document.createElement('tr');
+                    newRow.innerHTML = `
+                        <td>${latestData.timestamp}</td>
+                        <td>${latestData.pressure}</td>
+                    `;
+                    newRow.style.backgroundColor = '#e8f5e9';  // Highlight new row
+                    tableBody.insertBefore(newRow, tableBody.firstChild);
+                    
+                    // Remove highlight after animation
+                    setTimeout(() => {
+                        newRow.style.backgroundColor = '';
+                    }, 1000);
+
+                    // Keep only last 100 rows
+                    while (tableBody.children.length > 100) {
+                        tableBody.removeChild(tableBody.lastChild);
+                    }
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('connectionStatus').textContent = 'Disconnected';
+            document.getElementById('connectionStatus').style.color = 'red';
+        });
+}
+
+// Toggle updates
+document.getElementById('toggleUpdates').addEventListener('click', function() {
+    isUpdating = !isUpdating;
+    this.textContent = isUpdating ? 'Pause Updates' : 'Resume Updates';
+    if (isUpdating) {
+        updateData();  // Immediate update when resuming
+    }
+});
+
+// Start updates
+setInterval(updateData, 1000);
+updateData();  // Initial update
+</script>
+
+<style>
+.data-container {
+    margin: 20px 0;
+    padding: 20px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+}
+
+.latest-reading {
+    background-color: #e3f2fd;
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.latest-reading h4 {
+    color: #1976d2;
+    margin-bottom: 10px;
+}
+
+.data-table {
+    max-height: 400px;
+    overflow-y: auto;
+    margin: 20px 0;
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: white;
+}
+
+th, td {
+    padding: 10px;
+    text-align: left;
+    border: 1px solid #ddd;
+}
+
+th {
+    background-color: #3498db;
+    color: white;
+    position: sticky;
+    top: 0;
+}
+
+tr:nth-child(even) {
+    background-color: #f2f2f2;
+}
+
+tr {
+    transition: background-color 0.5s ease;
+}
+
+.controls {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+#connectionStatus {
+    font-weight: bold;
+}
+
+button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    background-color: #3498db;
+    color: white;
+    transition: background-color 0.3s ease;
+}
+
+button:hover {
+    background-color: #2980b9;
+}
+</style>
+{% endblock %} 

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <header>
+        <h1>IP Dashboard System</h1>
+    </header>
+
+    <div class="content-wrapper">
+        <main class="main-content">
+            <div class="top-bar">
+                {% if request.endpoint == 'home' %}  <!-- Only show add button on home page -->
+                <button id="addIpBtn" class="add-ip-btn">Add IP</button>
+                {% endif %}
+            </div>
+            <div class="dashboard-container">
+                {% block content %}
+                {% endblock %}
+            </div>
+        </main>
+    </div>
+
+    <footer>
+        <div class="footer-left">
+            <p>Dashboard Monitor System</p>
+        </div>
+        <div class="footer-right">
+            <p>Version 1.0</p>
+        </div>
+    </footer>
+
+    <!-- Only include modal if on home page -->
+    {% if request.endpoint == 'home' %}
+    <div id="ipModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Enter IP Address</h2>
+            <input type="text" id="ipInput" placeholder="Enter IP address">
+            <button id="submitIp">Submit</button>
+        </div>
+    </div>
+    {% endif %}
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html> 

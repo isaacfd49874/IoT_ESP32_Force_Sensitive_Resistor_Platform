@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block title %}IP Dashboard{% endblock %}
+
+{% block content %}
+<div id="dashboardGrid">
+    {% for i in range(1, 33) %}
+    <div class="dashboard-item" id="dashboard-{{ i }}" data-id="{{ i }}">
+        <div class="dashboard-header">
+            Dashboard {{ i }}
+            <button class="delete-ip-btn" style="display: {% if dashboard_data.get(i|string) %}inline{% else %}none{% endif %}">×</button>
+        </div>
+        <div class="dashboard-content">
+            <span class="ip-display">{{ dashboard_data.get(i|string, 'Empty') }}</span>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %} 
