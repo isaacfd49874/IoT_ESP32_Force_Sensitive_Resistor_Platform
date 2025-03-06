@@ -5,11 +5,6 @@
 {% block content %}
 <div class="dashboard-view">
     <h2>Dashboard {{ dashboard_id }}</h2>
-    <div class="ip-info">
-        <h3>IP Address:</h3>
-        <p class="ip-display">{{ ip }}</p>
-        <p>Status: <span id="connectionStatus">Connecting...</span></p>
-    </div>
     
     <div class="data-container">
         <h3>Collected Data</h3>
@@ -18,6 +13,49 @@
             <p>Pressure: <span id="latestPressure">-</span></p>
             <p>Time: <span id="latestTime">-</span></p>
         </div>
+
+        <div class="chart-controls">
+            <div class="time-controls">
+                <div class="control-group">
+                    <label for="dateSelector">Select Date:</label>
+                    <input type="date" id="dateSelector">
+                </div>
+                <div class="control-group">
+                    <label for="timeRange">Time Range:</label>
+                    <select id="timeRange">
+                        <option value="0">00:00-01:00</option>
+                        <option value="1">01:00-02:00</option>
+                        <option value="2">02:00-03:00</option>
+                        <option value="3">03:00-04:00</option>
+                        <option value="4">04:00-05:00</option>
+                        <option value="5">05:00-06:00</option>
+                        <option value="6">06:00-07:00</option>
+                        <option value="7">07:00-08:00</option>
+                        <option value="8">08:00-09:00</option>
+                        <option value="9">09:00-10:00</option>
+                        <option value="10">10:00-11:00</option>
+                        <option value="11">11:00-12:00</option>
+                        <option value="12">12:00-13:00</option>
+                        <option value="13">13:00-14:00</option>
+                        <option value="14">14:00-15:00</option>
+                        <option value="15">15:00-16:00</option>
+                        <option value="16">16:00-17:00</option>
+                        <option value="17">17:00-18:00</option>
+                        <option value="18">18:00-19:00</option>
+                        <option value="19">19:00-20:00</option>
+                        <option value="20">20:00-21:00</option>
+                        <option value="21">21:00-22:00</option>
+                        <option value="22">22:00-23:00</option>
+                        <option value="23">23:00-24:00</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="pressureChart"></canvas>
+        </div>
+
         <div class="data-table">
             <table>
                 <thead>
@@ -26,14 +64,7 @@
                         <th>Pressure</th>
                     </tr>
                 </thead>
-                <tbody id="dataTableBody">
-                    {% for item in data %}
-                    <tr>
-                        <td>{{ item.timestamp }}</td>
-                        <td>{{ item.pressure }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
+                <tbody id="dataTableBody"></tbody>
             </table>
         </div>
     </div>
@@ -44,71 +75,232 @@
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
 <script>
 let isUpdating = true;
-let lastTimestamp = '';
+let chart;
+let allData = []; // Store all data for slider functionality
+
+function initChart() {
+    const ctx = document.getElementById('pressureChart').getContext('2d');
+    chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            datasets: [{
+                label: 'Pressure',
+                data: [],
+                borderColor: 'rgb(75, 192, 192)',
+                tension: 0.1,
+                borderWidth: 2,
+                pointRadius: 0,
+                pointHoverRadius: 5
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    type: 'time',
+                    time: {
+                        unit: 'hour',
+                        displayFormats: {
+                            minute: 'HH:mm',
+                            hour: 'HH:mm',
+                            day: 'MM/DD HH:mm'
+                        }
+                    },
+                    title: { display: true, text: 'Time' },
+                    ticks: { 
+                        source: 'auto',
+                        maxRotation: 45,
+                        minRotation: 45,
+                        callback: function(value) {
+                            const date = new Date(value);
+                            return date.toLocaleTimeString('en-US', { 
+                                hour: '2-digit', 
+                                minute: '2-digit',
+                                hour12: false 
+                            });
+                        }
+                    },
+                    adapters: {
+                        date: {
+                            zone: 'UTC'
+                        }
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    title: { display: true, text: 'Pressure' }
+                }
+            },
+            plugins: {
+                title: { display: true, text: 'Pressure Over Time' },
+                tooltip: { 
+                    mode: 'index', 
+                    intersect: false,
+                    callbacks: {
+                        title: function(tooltipItems) {
+                            const date = new Date(tooltipItems[0].parsed.x);
+                            return date.toLocaleString('en-US', {
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                hour12: false
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function updateChart(data) {
+    if (!data?.length) {
+        console.log('No data available for chart');
+        return;
+    }
+
+    const selectedDate = document.getElementById('dateSelector').value;
+    const selectedHour = parseInt(document.getElementById('timeRange').value);
+    
+    let startDate, endDate;
+    
+    if (selectedDate) {
+        // If a date is selected, show data for that specific date and hour
+        startDate = new Date(selectedDate);
+        startDate.setHours(selectedHour, 0, 0, 0);
+        endDate = new Date(selectedDate);
+        endDate.setHours(selectedHour + 1, 0, 0, 0);
+    } else {
+        // If no date is selected, use today's date with selected hour
+        const today = new Date();
+        startDate = new Date(today);
+        startDate.setHours(selectedHour, 0, 0, 0);
+        endDate = new Date(today);
+        endDate.setHours(selectedHour + 1, 0, 0, 0);
+    }
+    
+    const filteredData = data.filter(item => {
+        const itemTime = new Date(item.timestamp);
+        return itemTime >= startDate && itemTime < endDate;
+    });
+
+    // Update chart data
+    chart.data.datasets[0].data = filteredData.map(item => ({
+        x: new Date(item.timestamp),
+        y: parseFloat(item.pressure)
+    }));
+
+    // Update time unit and display format
+    chart.options.scales.x.time.unit = 'minute';
+    chart.options.scales.x.ticks.callback = function(value) {
+        const date = new Date(value);
+        return date.toLocaleTimeString('en-US', { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            hour12: false 
+        });
+    };
+
+    // Set the time scale bounds
+    chart.options.scales.x.min = startDate;
+    chart.options.scales.x.max = endDate;
+
+    // Force chart update
+    chart.update('none');
+}
+
+function updateTable(data) {
+    if (!data?.length) return;
+    
+    document.getElementById('dataTableBody').innerHTML = data.map(item => `
+        <tr>
+            <td>${item.timestamp}</td>
+            <td>${item.pressure}</td>
+        </tr>
+    `).join('');
+}
+
+function updateUI(data, status, color) {
+    if (data?.length) {
+        const latest = data[data.length - 1];
+        document.getElementById('latestPressure').textContent = latest.pressure;
+        document.getElementById('latestTime').textContent = latest.timestamp;
+        updateChart(data);
+        updateTable(data);
+    }
+    document.getElementById('connectionStatus').textContent = status;
+    document.getElementById('connectionStatus').style.color = color;
+}
+
+function loadHistoricalData() {
+    fetch(`/api/historical-data/{{ ip }}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data?.length) {
+                updateUI(data, 'Using Historical Data', 'orange');
+            } else {
+                updateUI(null, 'No Data Available', 'red');
+            }
+        })
+        .catch(() => updateUI(null, 'Error Loading Data', 'red'));
+}
 
 function updateData() {
     if (!isUpdating) return;
 
-    fetch(`/api/data/{{ ip }}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.length > 0) {
-                const latestData = data[data.length - 1];
-                
-                // Update latest reading
-                document.getElementById('latestPressure').textContent = latestData.pressure;
-                document.getElementById('latestTime').textContent = latestData.timestamp;
-                document.getElementById('connectionStatus').textContent = 'Connected';
-                document.getElementById('connectionStatus').style.color = 'green';
-
-                // Only update table if we have new data
-                if (latestData.timestamp !== lastTimestamp) {
-                    lastTimestamp = latestData.timestamp;
-                    
-                    const tableBody = document.getElementById('dataTableBody');
-                    
-                    // Add new row at the top
-                    const newRow = document.createElement('tr');
-                    newRow.innerHTML = `
-                        <td>${latestData.timestamp}</td>
-                        <td>${latestData.pressure}</td>
-                    `;
-                    newRow.style.backgroundColor = '#e8f5e9';  // Highlight new row
-                    tableBody.insertBefore(newRow, tableBody.firstChild);
-                    
-                    // Remove highlight after animation
-                    setTimeout(() => {
-                        newRow.style.backgroundColor = '';
-                    }, 1000);
-
-                    // Keep only last 100 rows
-                    while (tableBody.children.length > 100) {
-                        tableBody.removeChild(tableBody.lastChild);
-                    }
-                }
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            document.getElementById('connectionStatus').textContent = 'Disconnected';
-            document.getElementById('connectionStatus').style.color = 'red';
-        });
+    Promise.race([
+        fetch(`/api/data/{{ ip }}`).then(response => response.json()),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 30000))
+    ])
+    .then(data => {
+        if (data?.length) {
+            updateUI(data, 'Connected', 'green');
+        } else {
+            loadHistoricalData();
+        }
+    })
+    .catch(() => loadHistoricalData());
 }
 
-// Toggle updates
-document.getElementById('toggleUpdates').addEventListener('click', function() {
-    isUpdating = !isUpdating;
-    this.textContent = isUpdating ? 'Pause Updates' : 'Resume Updates';
-    if (isUpdating) {
-        updateData();  // Immediate update when resuming
-    }
+document.addEventListener('DOMContentLoaded', () => {
+    initChart();
+    updateData();
+    setInterval(updateData, 1000);
+
+    // Set default date to today
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('dateSelector').value = today;
+
+    // Set default time range to current hour
+    const currentHour = new Date().getHours();
+    document.getElementById('timeRange').value = currentHour;
+
+    document.getElementById('dateSelector').addEventListener('change', () => {
+        if (allData?.length) {
+            updateChart(allData);
+        }
+    });
+
+    document.getElementById('timeRange').addEventListener('change', () => {
+        if (allData?.length) {
+            updateChart(allData);
+        }
+    });
+
+    document.getElementById('toggleUpdates').addEventListener('click', function() {
+        isUpdating = !isUpdating;
+        this.textContent = isUpdating ? 'Pause Updates' : 'Resume Updates';
+        if (isUpdating) updateData();
+    });
 });
 
-// Start updates
-setInterval(updateData, 1000);
-updateData();  // Initial update
+window.addEventListener('resize', () => chart?.resize());
 </script>
 
 <style>
@@ -159,13 +351,8 @@ th {
     top: 0;
 }
 
-tr:nth-child(even) {
-    background-color: #f2f2f2;
-}
-
-tr {
-    transition: background-color 0.5s ease;
-}
+tr:nth-child(even) { background-color: #f2f2f2; }
+tr { transition: background-color 0.5s ease; }
 
 .controls {
     display: flex;
@@ -173,9 +360,7 @@ tr {
     justify-content: center;
 }
 
-#connectionStatus {
-    font-weight: bold;
-}
+#connectionStatus { font-weight: bold; }
 
 button {
     padding: 10px 20px;
@@ -187,8 +372,65 @@ button {
     transition: background-color 0.3s ease;
 }
 
-button:hover {
-    background-color: #2980b9;
+button:hover { background-color: #2980b9; }
+
+.chart-controls {
+    margin: 20px 0;
+    text-align: center;
+}
+
+.time-controls {
+    display: flex;
+    justify-content: center;
+    margin: 20px 0;
+}
+
+.control-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 10px;
+}
+
+.control-group label {
+    font-size: 14px;
+    color: #666;
+}
+
+#dateSelector {
+    padding: 8px 16px;
+    font-size: 14px;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+    background-color: white;
+    cursor: pointer;
+}
+
+#dateSelector:hover {
+    border-color: #3498db;
+}
+
+#timeRange {
+    padding: 8px 16px;
+    font-size: 14px;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+    background-color: white;
+    cursor: pointer;
+}
+
+#timeRange:hover {
+    border-color: #3498db;
+}
+
+.chart-container {
+    width: 100%;
+    height: 400px;
+    margin: 20px 0;
+    background-color: white;
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 15px;
 }
 </style>
 {% endblock %} 

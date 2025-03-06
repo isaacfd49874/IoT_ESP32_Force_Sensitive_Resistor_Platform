@@ -60,6 +60,8 @@ def collect_data(ip_address):
                                 data_list.pop(0)
                             # Save data to file
                             save_ip_data(ip_address, data_list)
+                            # Update the global data_collections dictionary
+                            data_collections[ip_address] = data_list
                         print(f"Fetched data from {ip_address}: {json_data}")
 
                     time.sleep(1)
@@ -93,6 +95,16 @@ def update_dashboard(dashboard_id, ip):
         if dash_ip == ip:
             return jsonify({"success": False, "message": "IP already exists"}), 400
     
+    # Start data collection for new IP immediately
+    if ip not in data_collections:
+        data_collections[ip] = []
+        data_locks[ip] = threading.Lock()
+        data_thread = threading.Thread(target=collect_data, args=(ip,), daemon=True)
+        data_threads[ip] = data_thread
+        data_thread.start()
+        # Wait a short moment to ensure first data collection
+        time.sleep(1)
+    
     dashboard_data['dashboards'][dashboard_id] = ip
     save_dashboard_data(dashboard_data)
     return jsonify({"success": True})
@@ -110,10 +122,32 @@ def delete_dashboard(dashboard_id):
 
 @app.route('/api/data/<ip>', methods=['GET'])
 def get_ip_data(ip):
-    if ip in data_collections:
-        with data_locks[ip]:
-            return jsonify(data_collections[ip])
-    return jsonify([])
+    try:
+        # Convert IP to filename format (replace dots with underscores)
+        filename = f'static/data/{ip.replace(".", "_")}_data.json'
+        if os.path.exists(filename):
+            with open(filename, 'r') as f:
+                return jsonify(json.load(f))
+        return jsonify([])
+    except Exception as e:
+        print(f"Error reading data file: {e}")
+        return jsonify([])
+
+@app.route('/api/historical-data/<ip>', methods=['GET'])
+def get_historical_data(ip):
+    try:
+        # Convert IP to filename format (replace dots with underscores)
+        filename = f'static/data/{ip.replace(".", "_")}_data.json'
+        if os.path.exists(filename):
+            with open(filename, 'r') as f:
+                data = json.load(f)
+                # Sort data by timestamp if needed
+                data.sort(key=lambda x: x['timestamp'])
+                return jsonify(data)
+        return jsonify([])
+    except Exception as e:
+        print(f"Error reading historical data file: {e}")
+        return jsonify([])
 
 if __name__ == '__main__':
     # Create data directory if it doesn't exist

@@ -17,56 +17,46 @@ document.addEventListener('DOMContentLoaded', function() {
             updateActiveIpCount(Object.keys(data.dashboards).length);
         });
 
-    // Open modal
-    addIpBtn.onclick = function() {
-        modal.style.display = "block";
-    }
-
-    // Close modal
-    closeBtn.onclick = function() {
-        modal.style.display = "none";
-    }
-
-    // Close modal when clicking outside
-    window.onclick = function(event) {
-        if (event.target == modal) {
-            modal.style.display = "none";
-        }
-    }
+    // Modal controls
+    addIpBtn.onclick = () => modal.style.display = "block";
+    closeBtn.onclick = () => modal.style.display = "none";
+    window.onclick = (e) => { if (e.target == modal) modal.style.display = "none"; }
 
     // Submit IP
     submitIpBtn.onclick = function() {
-        const ip = ipInput.value.trim();
-        if (isValidIP(ip)) {
-            const emptyDashboard = findEmptyDashboard();
-            if (emptyDashboard) {
-                const dashboardId = emptyDashboard.dataset.id;
-                
-                // Send update to server
-                fetch(`/api/dashboard/${dashboardId}/${ip}`, {
-                    method: 'POST'
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        updateDashboard(emptyDashboard, ip);
-                        modal.style.display = "none";
-                        ipInput.value = '';
-                        activeIpCount++;
-                        updateActiveIpCount(activeIpCount);
-                    } else {
-                        alert(data.message || 'IP already exists in another dashboard');
-                    }
-                })
-                .catch(error => {
-                    alert('Error updating dashboard');
-                });
-            } else {
-                alert('No empty dashboards available!');
-            }
-        } else {
-            alert('Please enter a valid IP address!');
+        const ip = document.getElementById('ipInput').value.trim();
+        const emptyDashboard = Array.from(dashboards).find(
+            dashboard => dashboard.querySelector('.ip-display').textContent === 'Empty'
+        );
+        
+        if (!emptyDashboard) {
+            alert('No empty dashboards available!');
+            return;
         }
+
+        const dashboardId = emptyDashboard.dataset.id;
+        const ipDisplay = emptyDashboard.querySelector('.ip-display');
+        ipDisplay.textContent = 'Connecting...';
+        
+        fetch(`/api/dashboard/${dashboardId}/${ip}`, {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                modal.style.display = 'none';
+                document.getElementById('ipInput').value = '';
+                alert('IP added successfully! Please wait while connecting to the device...');
+                window.location.href = `/view/${ip}/${dashboardId}`;
+            } else {
+                ipDisplay.textContent = 'Empty';
+                alert(data.message || 'This IP is already in use. Please try another IP.');
+            }
+        })
+        .catch(() => {
+            ipDisplay.textContent = 'Empty';
+            alert('Please wait, now handling the IP connection...');
+        });
     }
 
     // Dashboard click handler
@@ -80,28 +70,28 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Add delete button handler
+    // Delete button handler
     document.querySelectorAll('.delete-ip-btn').forEach(button => {
         button.addEventListener('click', function(e) {
-            e.stopPropagation(); // Prevent dashboard click event
+            e.stopPropagation();
             const dashboard = this.closest('.dashboard-item');
             const dashboardId = dashboard.dataset.id;
             
             if (confirm('Are you sure you want to delete this IP?')) {
+                const ipDisplay = dashboard.querySelector('.ip-display');
+                ipDisplay.textContent = 'Deleting...';
+                this.style.display = 'none';
+
                 fetch(`/api/dashboard/${dashboardId}`, {
                     method: 'DELETE'
                 })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        dashboard.querySelector('.ip-display').textContent = 'Empty';
-                        this.style.display = 'none';
-                        activeIpCount--;
-                        updateActiveIpCount(activeIpCount);
-                    }
+                .then(() => {
+                    ipDisplay.textContent = 'Empty';
+                    alert('IP deleted successfully!');
                 })
-                .catch(error => {
-                    alert('Error deleting IP');
+                .catch(() => {
+                    ipDisplay.textContent = 'Empty';
+                    alert('Please wait, deleting the IP...');
                 });
             }
         });
@@ -129,28 +119,18 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('activeIpCount').textContent = count;
     }
 
-    // Add rolling animation
-    function addRollingAnimation() {
-        dashboards.forEach((dashboard, index) => {
-            dashboard.style.animation = `rollIn 0.5s ease-out ${index * 0.1}s`;
-        });
-    }
-
-    addRollingAnimation();
+    // Add simple fade-in animation
+    dashboards.forEach((dashboard, index) => {
+        dashboard.style.animation = `fadeIn 0.5s ease-out ${index * 0.1}s`;
+    });
 });
 
-// Add this CSS animation to your style.css
+// Simple fade-in animation
 document.head.insertAdjacentHTML('beforeend', `
     <style>
-    @keyframes rollIn {
-        from {
-            opacity: 0;
-            transform: translateY(20px) rotate(-5deg);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0) rotate(0);
-        }
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
     }
     </style>
 `);
